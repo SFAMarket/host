@@ -1,7 +1,7 @@
 import {ethers, Contract} from "ethers";
-import {PROVIDER_URL, TOKEN_CONTRACT_ADDRESS, MARKET_CONTRACT_ADDRESS, PRIVATE_KEY} from "../config/constants";
-import SFAJson from "../assets/SFAToken.json";
-import MarketJson from "../assets/Market.json";
+import {PROVIDER_URL, TOKEN_CONTRACT_ADDRESS, MARKET_CONTRACT_ADDRESS, PRIVATE_KEY} from "../config/constants.ts";
+import SFAJson from "../assets/SFAToken.json" with { type: "json" };
+import MarketJson from "../assets/Market.json" with { type: "json" };
 
 export default async function initEthers(providerURL = PROVIDER_URL) {
     // Initialize provider

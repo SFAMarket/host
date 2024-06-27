@@ -248,305 +248,305 @@ async function main() {
 //     );
 // }
 
-async function getStorageOrders() {
-    // Add logic
-    const sfaAddress: string = await eth.contracts.tokenERC20.getAddress();
-    console.log("Greeting from contract SFA:", sfaAddress);
-    const marketAddress: string = await eth.contracts.marketERC721.getAddress();
-    console.log("Greeting from contract Market:", marketAddress);
-}
+// async function getStorageOrders() {
+//     // Add logic
+//     const sfaAddress: string = await eth.contracts.tokenERC20.getAddress();
+//     console.log("Greeting from contract SFA:", sfaAddress);
+//     const marketAddress: string = await eth.contracts.marketERC721.getAddress();
+//     console.log("Greeting from contract Market:", marketAddress);
+// }
 
-async function printLocalPeerData() {
-    console.info("Helia is running");
-    console.info("PeerId:", ipfs.node?.libp2p.peerId.toString());
-    console.info("MultiAddress of this Node:");
-    const addr = ipfs.node?.libp2p.getMultiaddrs();
-    console.log(addr);
-}
+// async function printLocalPeerData() {
+//     console.info("Helia is running");
+//     console.info("PeerId:", ipfs.node?.libp2p.peerId.toString());
+//     console.info("MultiAddress of this Node:");
+//     const addr = ipfs.node?.libp2p.getMultiaddrs();
+//     console.log(addr);
+// }
 
-async function printEthStruct() {
-    console.log("Provider:", eth.provider);
-    console.log("Wallet address:", eth.wallet.address);
-    console.log("SFA address:", await eth.contracts.tokenERC20.getAddress());
-    console.log("Market Contract address:", await eth.contracts.marketERC721.getAddress());
-    //console.log('ABI:', eth.abiSFA);
-    //console.log('ABI:', eth.abiMarket);
-}
+// async function printEthStruct() {
+//     console.log("Provider:", eth.provider);
+//     console.log("Wallet address:", eth.wallet.address);
+//     console.log("SFA address:", await eth.contracts.tokenERC20.getAddress());
+//     console.log("Market Contract address:", await eth.contracts.marketERC721.getAddress());
+//     //console.log('ABI:', eth.abiSFA);
+//     //console.log('ABI:', eth.abiMarket);
+// }
 
-async function printDialedPeers() {
-    dialedPeers = ipfs.node?.libp2p.getPeers();
-    console.log("The following peers are dialing:");
-    console.log(dialedPeers);
-}
+// async function printDialedPeers() {
+//     dialedPeers = ipfs.node?.libp2p.getPeers();
+//     console.log("The following peers are dialing:");
+//     console.log(dialedPeers);
+// }
 
-async function DialAPeerID(peer: string) {
-    // Check tipes and merge reduce code duplication with dialMulltiaddr
-    // ToDo: Use isName to check dns strings
-    try {
-        console.log("Dialing {peer}...");
-        const dialPeerID = peerIdFromString(peer);
-        await ipfs.node?.libp2p.dial(dialPeerID);
-        console.log("OK: dialed:", dialPeerID);
-    } catch (error) {
-        console.log("Error: ", error);
-    }
-}
+// async function DialAPeerID(peer: string) {
+//     // Check tipes and merge reduce code duplication with dialMulltiaddr
+//     // ToDo: Use isName to check dns strings
+//     try {
+//         console.log("Dialing {peer}...");
+//         const dialPeerID = peerIdFromString(peer);
+//         await ipfs.node?.libp2p.dial(dialPeerID);
+//         console.log("OK: dialed:", dialPeerID);
+//     } catch (error) {
+//         console.log("Error: ", error);
+//     }
+// }
 
-async function DialAMultiaddr(addrs: string) {
-    // ToDo: Use isName to check dns strings
-    const peerMultiAddr = multiaddr(addrs);
-    try {
-        if (isMultiaddr(peerMultiAddr)) {
-            await ipfs.node?.libp2p.dial(peerMultiAddr);
-            console.log("dialed:", peerMultiAddr);
-        }
-    } catch (error) {
-        console.log("Error: ", error);
-    }
-}
+// async function DialAMultiaddr(addrs: string) {
+//     // ToDo: Use isName to check dns strings
+//     const peerMultiAddr = multiaddr(addrs);
+//     try {
+//         if (isMultiaddr(peerMultiAddr)) {
+//             await ipfs.node?.libp2p.dial(peerMultiAddr);
+//             console.log("dialed:", peerMultiAddr);
+//         }
+//     } catch (error) {
+//         console.log("Error: ", error);
+//     }
+// }
 
-function printNumerableDialedPeers(): void {
-    dialedPeers = ipfs.node?.libp2p.getPeers();
-    for (let [index, element] of dialedPeers.entries()) {
-        console.log(`${index} is peerID: ${element.toString()}`);
-    }
-}
+// function printNumerableDialedPeers(): void {
+//     dialedPeers = ipfs.node?.libp2p.getPeers();
+//     for (let [index, element] of dialedPeers.entries()) {
+//         console.log(`${index} is peerID: ${element.toString()}`);
+//     }
+// }
 
-async function hangUpAPeer(index: string) {
-    let hangUpPeerId = dialedPeers[Number(index)];
-    try {
-        await ipfs.node?.libp2p.hangUp(hangUpPeerId);
-        console.log(`peerID: ${hangUpPeerId.toString()},\n hanged Up`);
-    } catch (error) {
-        console.log("Error: ", error);
-    }
-}
+// async function hangUpAPeer(index: string) {
+//     let hangUpPeerId = dialedPeers[Number(index)];
+//     try {
+//         await ipfs.node?.libp2p.hangUp(hangUpPeerId);
+//         console.log(`peerID: ${hangUpPeerId.toString()},\n hanged Up`);
+//     } catch (error) {
+//         console.log("Error: ", error);
+//     }
+// }
 
-async function printNumerableOrders() {
-    // TODO: Add pinned status ans structs
-    // verify with blockchain
-    try {
-        if (storageOrders.length > 0) {
-            for (let [index, element] of storageOrders.entries()) {
-                console.log(`${index} order has CID: ${element.toString()}`);
-            }
-        } else {
-            console.log("No Stored Orders");
-        }
-    } catch (error) {
-        console.log("Error:", error);
-    }
-}
+// async function printNumerableOrders() {
+//     // TODO: Add pinned status ans structs
+//     // verify with blockchain
+//     try {
+//         if (storageOrders.length > 0) {
+//             for (let [index, element] of storageOrders.entries()) {
+//                 console.log(`${index} order has CID: ${element.toString()}`);
+//             }
+//         } else {
+//             console.log("No Stored Orders");
+//         }
+//     } catch (error) {
+//         console.log("Error:", error);
+//     }
+// }
 
-// This puts data into the Helia Node
-async function pushData(data: string) {
-    const encoder = new TextEncoder();
-    const cid = await ipfs.fs.addBytes(encoder.encode(data), {
-        onProgress: (evt: any) => {
-            console.info("add event", evt.type, evt.detail);
-        },
-    });
-    storageOrders.push(cid);
-    console.log("Added file:", cid.toString());
-    return cid.toString();
-}
+// // This puts data into the Helia Node
+// async function pushData(data: string) {
+//     const encoder = new TextEncoder();
+//     const cid = await ipfs.fs.addBytes(encoder.encode(data), {
+//         onProgress: (evt: any) => {
+//             console.info("add event", evt.type, evt.detail);
+//         },
+//     });
+//     storageOrders.push(cid);
+//     console.log("Added file:", cid.toString());
+//     return cid.toString();
+// }
 
-// This gets data from the Helia Node and decodes it
-async function getData(orderIdx: string) {
-    // this decoder will turn Uint8Arrays into strings
-    const decoder = new TextDecoder();
-    const selectedOrder = storageOrders[Number(orderIdx)];
-    let text = "";
+// // This gets data from the Helia Node and decodes it
+// async function getData(orderIdx: string) {
+//     // this decoder will turn Uint8Arrays into strings
+//     const decoder = new TextDecoder();
+//     const selectedOrder = storageOrders[Number(orderIdx)];
+//     let text = "";
 
-    for await (const chunk of ipfs.fs.cat(selectedOrder, {
-        onProgress: (evt: any) => {
-            console.info("cat event", evt.type, evt.detail);
-        },
-    })) {
-        text += decoder.decode(chunk, {
-            stream: true,
-        });
-    }
+//     for await (const chunk of ipfs.fs.cat(selectedOrder, {
+//         onProgress: (evt: any) => {
+//             console.info("cat event", evt.type, evt.detail);
+//         },
+//     })) {
+//         text += decoder.decode(chunk, {
+//             stream: true,
+//         });
+//     }
 
-    console.log(`Data from: ${selectedOrder.toString()}`);
-    console.log(text);
-    //return text
-}
+//     console.log(`Data from: ${selectedOrder.toString()}`);
+//     console.log(text);
+//     //return text
+// }
 
-async function pinCID(cidString: string) {
-    const cid2Pin = CID.parse(cidString);
-    try {
-        ipfs.node?.pins.add(cid2Pin);
-        storageOrders.push(cid2Pin);
-        console.log("pinned CID:", cidString);
-    } catch (error) {
-        console.log("Pinning CID Error:", error);
-    }
-}
+// async function pinCID(cidString: string) {
+//     const cid2Pin = CID.parse(cidString);
+//     try {
+//         ipfs.node?.pins.add(cid2Pin);
+//         storageOrders.push(cid2Pin);
+//         console.log("pinned CID:", cidString);
+//     } catch (error) {
+//         console.log("Pinning CID Error:", error);
+//     }
+// }
 
-// for now is local CID
-async function unPinCID(index: number) {
-    const idxNum: number = +index;
-    let cid2Unpin = storageOrders[index];
-    try {
-        ipfs.node?.pins.rm(cid2Unpin);
-        if (idxNum > -1 && idxNum < storageOrders.length) {
-            storageOrders.splice(idxNum, 1);
-            console.log(`Unpinned CID: ${cid2Unpin.toString()}`);
-        }
-    } catch (error) {
-        console.log("Error: ", error);
-    }
-}
+// // for now is local CID
+// async function unPinCID(index: number) {
+//     const idxNum: number = +index;
+//     let cid2Unpin = storageOrders[index];
+//     try {
+//         ipfs.node?.pins.rm(cid2Unpin);
+//         if (idxNum > -1 && idxNum < storageOrders.length) {
+//             storageOrders.splice(idxNum, 1);
+//             console.log(`Unpinned CID: ${cid2Unpin.toString()}`);
+//         }
+//     } catch (error) {
+//         console.log("Error: ", error);
+//     }
+// }
 
-async function closeHelia() {
-    console.log("Closing session...");
-    await ipfs.node?.stop();
-    console.log("Good bye ;)");
-}
+// async function closeHelia() {
+//     console.log("Closing session...");
+//     await ipfs.node?.stop();
+//     console.log("Good bye ;)");
+// }
 
-// Protocol Functions
-async function balanceERC20(address?: string) {
-    console.log("EOAccount is:", eth.wallet.getAddress());
-    const walletAddress = address || eth.wallet.getAddress();
-    const decimals = await eth.contracts.tokenERC20.decimals();
-    const sfaBalance = await eth.contracts.tokenERC20.balanceOf(walletAddress);
-    console.log("SFA Balance:", formatUnits(sfaBalance.toString(), decimals));
-    const ethBalance = await eth.provider.getBalance(walletAddress);
-    console.log("ETH Balance:", formatEther(ethBalance));
-}
+// // Protocol Functions
+// async function balanceERC20(address?: string) {
+//     console.log("EOAccount is:", eth.wallet.getAddress());
+//     const walletAddress = address || eth.wallet.getAddress();
+//     const decimals = await eth.contracts.tokenERC20.decimals();
+//     const sfaBalance = await eth.contracts.tokenERC20.balanceOf(walletAddress);
+//     console.log("SFA Balance:", formatUnits(sfaBalance.toString(), decimals));
+//     const ethBalance = await eth.provider.getBalance(walletAddress);
+//     console.log("ETH Balance:", formatEther(ethBalance));
+// }
 
-async function importPKey(pKey: string) {
-    try {
-        eth = await initEthers(pKey);
-        console.log("new EOAccount is:", eth.wallet.getAddress());
-    } catch (error) {
-        console.log("Error on importPKey:", error);
-    }
-}
+// async function importPKey(pKey: string) {
+//     try {
+//         eth = await initEthers(pKey);
+//         console.log("new EOAccount is:", eth.wallet.getAddress());
+//     } catch (error) {
+//         console.log("Error on importPKey:", error);
+//     }
+// }
 
-async function registerHost(multiAddrs: string) {
-    try {
-        const tx = await eth.contracts.marketERC721.registerHost(multiAddrs);
-        const receipt = await tx.wait();
-        // ToDO Catch Error if reverted and do not dial
-        console.log(`The host was registered (${receipt.transactionHash})`);
-        // dial host (must be accessible multiaddrs)
-        await DialAMultiaddr(multiAddrs);
-    } catch (error) {
-        console.log("Error at Host Registry:", error);
-    }
-}
+// async function registerHost(multiAddrs: string) {
+//     try {
+//         const tx = await eth.contracts.marketERC721.registerHost(multiAddrs);
+//         const receipt = await tx.wait();
+//         // ToDO Catch Error if reverted and do not dial
+//         console.log(`The host was registered (${receipt.transactionHash})`);
+//         // dial host (must be accessible multiaddrs)
+//         await DialAMultiaddr(multiAddrs);
+//     } catch (error) {
+//         console.log("Error at Host Registry:", error);
+//     }
+// }
 
-async function fetchHost(addrs: string) {
-    try {
-        const result = await eth.contracts.marketERC721.hosts(addrs);
-        const host: Host = {
-            status: result[0],
-            multiAddrs: result[1],
-        };
-        console.log("Host Status:", host.status);
-        console.log("Host Multiaddress:", host.multiAddrs);
-        // ask if you want to dial from outside cli?
-        if (host) {
-            await DialAMultiaddr(host.multiAddrs);
-        }
-    } catch (error) {
-        console.log("Error at fetching a host:", error);
-    }
-}
+// async function fetchHost(addrs: string) {
+//     try {
+//         const result = await eth.contracts.marketERC721.hosts(addrs);
+//         const host: Host = {
+//             status: result[0],
+//             multiAddrs: result[1],
+//         };
+//         console.log("Host Status:", host.status);
+//         console.log("Host Multiaddress:", host.multiAddrs);
+//         // ask if you want to dial from outside cli?
+//         if (host) {
+//             await DialAMultiaddr(host.multiAddrs);
+//         }
+//     } catch (error) {
+//         console.log("Error at fetching a host:", error);
+//     }
+// }
 
-//Transfer ERC20
-async function transferTokens(to: string, amount: string) {
-    const decimals = await eth.contracts.tokenERC20.decimals();
-    const tokenAmount = parseUnits(amount, decimals);
-    try {
-        const tx = await eth.contracts.tokenERC20.transfer(to, tokenAmount);
-        const receipt = await tx.wait();
-        console.log(`The ${tokenAmount} tokens where sent to ${to}\n  on TxID: (${receipt})`);
-    } catch (error) {
-        console.log("Error transfering tokens:", error);
-    }
-}
+// //Transfer ERC20
+// async function transferTokens(to: string, amount: string) {
+//     const decimals = await eth.contracts.tokenERC20.decimals();
+//     const tokenAmount = parseUnits(amount, decimals);
+//     try {
+//         const tx = await eth.contracts.tokenERC20.transfer(to, tokenAmount);
+//         const receipt = await tx.wait();
+//         console.log(`The ${tokenAmount} tokens where sent to ${to}\n  on TxID: (${receipt})`);
+//     } catch (error) {
+//         console.log("Error transfering tokens:", error);
+//     }
+// }
 
-//Give Allowance
-async function allowTokens(to: string, amount: string) {
-    const decimals = await eth.contracts.tokenERC20.decimals();
-    const tokenAmount = parseUnits(amount, decimals);
-    try {
-        const tx = await eth.contracts.tokenERC20.approve(to, tokenAmount);
-        const receipt = await tx.wait();
-        console.log(`The ${tokenAmount} Tokens where approved to ${to}\n  on TxID: (${receipt})`);
-    } catch (error) {
-        console.log("Error transfering tokens:", error);
-    }
-}
+// //Give Allowance
+// async function allowTokens(to: string, amount: string) {
+//     const decimals = await eth.contracts.tokenERC20.decimals();
+//     const tokenAmount = parseUnits(amount, decimals);
+//     try {
+//         const tx = await eth.contracts.tokenERC20.approve(to, tokenAmount);
+//         const receipt = await tx.wait();
+//         console.log(`The ${tokenAmount} Tokens where approved to ${to}\n  on TxID: (${receipt})`);
+//     } catch (error) {
+//         console.log("Error transfering tokens:", error);
+//     }
+// }
 
-//Transfer ETH
-async function transferETH(to: string, amount: string) {
-    const value = parseEther(amount);
-    const tx = {
-        to: to,
-        value: value,
-    };
-    try {
-        const txResponse = await eth.wallet.sendTransaction(tx);
-        const receipt = await txResponse.wait();
-        console.log(`The ${value} ETH where sent to ${to}\n  on TxID: (${receipt})`);
-    } catch (error) {
-        console.log("Error transfering ETH:", error);
-    }
-}
+// //Transfer ETH
+// async function transferETH(to: string, amount: string) {
+//     const value = parseEther(amount);
+//     const tx = {
+//         to: to,
+//         value: value,
+//     };
+//     try {
+//         const txResponse = await eth.wallet.sendTransaction(tx);
+//         const receipt = await txResponse.wait();
+//         console.log(`The ${value} ETH where sent to ${to}\n  on TxID: (${receipt})`);
+//     } catch (error) {
+//         console.log("Error transfering ETH:", error);
+//     }
+// }
 
-async function getTimeStamp(secondsToAdd: string): Promise<string> {
-    const latestBlock = await eth.provider.getBlock("latest");
+// async function getTimeStamp(secondsToAdd: string): Promise<string> {
+//     const latestBlock = await eth.provider.getBlock("latest");
 
-    if (latestBlock === null) {
-        throw new Error("Failed to fetch the latest block.");
-    }
-    const newTimestamp = latestBlock.timestamp + secondsToAdd;
+//     if (latestBlock === null) {
+//         throw new Error("Failed to fetch the latest block.");
+//     }
+//     const newTimestamp = latestBlock.timestamp + secondsToAdd;
 
-    return newTimestamp.toString();
-}
+//     return newTimestamp.toString();
+// }
 
-// ToDo and test
-// SFA Logic To Test, right now only stores CID for Proof of COncept
-async function createSFA(vesting: string, cid: string, startTime: string, ttl: string) {
-    try {
-        const tx = await eth.contracts.marketERC721.createSFA(cid, vesting, startTime, ttl);
-        const receipt = await tx.wait();
-        console.log(`SFA was registered on (${receipt.transactionHash})`);
-    } catch (error) {
-        console.log("Error at Host Registry:", error);
-    }
-}
+// // ToDo and test
+// // SFA Logic To Test, right now only stores CID for Proof of COncept
+// async function createSFA(vesting: string, cid: string, startTime: string, ttl: string) {
+//     try {
+//         const tx = await eth.contracts.marketERC721.createSFA(cid, vesting, startTime, ttl);
+//         const receipt = await tx.wait();
+//         console.log(`SFA was registered on (${receipt.transactionHash})`);
+//     } catch (error) {
+//         console.log("Error at Host Registry:", error);
+//     }
+// }
 
-async function hostSFA() {
-    try {
-        const sfaCounter = await eth.contracts.marketERC721.sfaCounter();
-        await eth.contracts.marketERC721.claimHost(sfaCounter);
-        const sfa = await eth.contracts.marketERC721.sfas(sfaCounter);
-        if (sfa === null) {
-            throw new Error("Failed to fetch the latest block.");
-        }
-        const sfaStruct: SFA = {
-            publisher: sfa[0],
-            cid: sfa[1],
-            vesting: sfa[2],
-            vested: sfa[3],
-            startTime: sfa[4],
-            ttl: sfa[5],
-            status: sfa[6],
-            host: sfa[7],
-            pendingHost: sfa[8],
-            collateral: sfa[9],
-        };
-        await pinCID(sfaStruct.cid);
-        console.log(`SFA hosted with cid ${sfaStruct.cid} and sfaCounter: ${sfaCounter}`);
-    } catch (error) {
-        console.log("Error at fetching a host:", error);
-    }
-}
+// async function hostSFA() {
+//     try {
+//         const sfaCounter = await eth.contracts.marketERC721.sfaCounter();
+//         await eth.contracts.marketERC721.claimHost(sfaCounter);
+//         const sfa = await eth.contracts.marketERC721.sfas(sfaCounter);
+//         if (sfa === null) {
+//             throw new Error("Failed to fetch the latest block.");
+//         }
+//         const sfaStruct: SFA = {
+//             publisher: sfa[0],
+//             cid: sfa[1],
+//             vesting: sfa[2],
+//             vested: sfa[3],
+//             startTime: sfa[4],
+//             ttl: sfa[5],
+//             status: sfa[6],
+//             host: sfa[7],
+//             pendingHost: sfa[8],
+//             collateral: sfa[9],
+//         };
+//         await pinCID(sfaStruct.cid);
+//         console.log(`SFA hosted with cid ${sfaStruct.cid} and sfaCounter: ${sfaCounter}`);
+//     } catch (error) {
+//         console.log("Error at fetching a host:", error);
+//     }
+// }
 
 // main().catch((error) => {
 //     console.error(error);
