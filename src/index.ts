@@ -1,13 +1,16 @@
 /* eslint-disable no-console */
+import fs from "fs";
 import {CID} from "multiformats/cid";
 import {multiaddr, isMultiaddr} from "@multiformats/multiaddr";
 import {peerIdFromString} from "@libp2p/peer-id";
 import {PeerId} from "@libp2p/interface";
 import initEthers from "./modules/ethers.ts";
 import initHelia from "./modules/helia.ts";
-import {JsonRpcProvider, Wallet, Contract, formatUnits, formatEther, parseUnits, parseEther} from "ethers";
+import {JsonRpcProvider, Wallet, Contract, formatUnits, formatEther, parseUnits, parseEther, ethers} from "ethers";
 import inquirer from "inquirer";
 import {DateTime} from "luxon";
+import * as utils from "./modules/utils.ts";
+import * as CONSTANTS from "./config/constants.ts";
 
 interface EthersStruct {
     provider: JsonRpcProvider;
@@ -196,8 +199,7 @@ const closeHelia = async () => {
 };
 
 const balanceERC20 = async (address?: string) => {
-    console.log("EOAccount is:", eth.wallet.getAddress());
-    const walletAddress = address || eth.wallet.getAddress();
+    const walletAddress = address || (await eth.wallet.getAddress());
     const decimals = await eth.contracts.tokenERC20.decimals();
     const sfaBalance = await eth.contracts.tokenERC20.balanceOf(walletAddress);
     console.log("SFA Balance:", formatUnits(sfaBalance.toString(), decimals));
@@ -351,7 +353,7 @@ const menuOptions = async () => {
         },
     ];
 
-    const actions = {
+    const actions: {[key: string]: any} = {
         exit: async () => {
             closeHelia();
         },
@@ -430,7 +432,12 @@ const menuOptions = async () => {
         },
         accountBalance: async () => {
             const {account} = await inquirer.prompt([
-                {type: "input", name: "account", message: "Please input an ethereum address:"},
+                {
+                    type: "input",
+                    name: "account",
+                    message: "Please input an ethereum address:",
+                    default: `${await eth.wallet.getAddress()}`,
+                },
             ]);
             await balanceERC20(account);
             menuOptions();
@@ -535,9 +542,8 @@ const menuOptions = async () => {
         },
     };
 
-    const answers = await inquirer.prompt(questions);
-    console.log(answers);
-    const action = actions[answers];
+    const {option} = await inquirer.prompt(questions);
+    const action = actions[option];
 
     if (typeof action === "function") {
         await action();
@@ -549,14 +555,41 @@ const menuOptions = async () => {
 const setup = async () => {
     const questions = [
         {
+            name: "PRIVATE_KEY",
             type: "password",
-            message: "Enter a password",
-            name: "password1",
+            mask: "*",
+            message: `Enter a host private key (0x${"*".repeat(
+                CONSTANTS.PRIVATE_KEY.length - 3
+            )}${CONSTANTS.PRIVATE_KEY.slice(-6)})`,
+            default: `${CONSTANTS.PRIVATE_KEY}`,
+            validate: (input: string) => {
+                if (ethers.isHexString(input)) {
+                    return true;
+                } else {
+                    if (input.length === 64) {
+                        return ethers.isHexString(`0x${input}`);
+                    }
+                    return "wrong private key format";
+                }
+            },
         },
         {
-            type: "list",
-            name: "option",
-            message: "Select operation:",
+            name: "savePrivateKey",
+            type: "confirm",
+            message: "save private key in local file? (Y/n)",
+        },
+        {
+            name: "PROVIDER_URL",
+            type: "input",
+            message: "Provider JSON RPC url:",
+            default: `${CONSTANTS.PROVIDER_URL}`,
+            validate: (value: string) => {
+                if (value.length) {
+                    return true;
+                } else {
+                    return "Please enter your name";
+                }
+            },
         },
         {
             type: "confirm",
@@ -565,8 +598,9 @@ const setup = async () => {
         },
     ];
 
-    const {ok} = await inquirer.prompt(questions);
-    return ok;
+    const res = await inquirer.prompt(questions);
+    if (res.savePrivateKey) utils.updateEnvFile("PRIVATE_KEY", res.PRIVATE_KEY);
+    return res.ok;
 };
 
 const main = async () => {
@@ -574,17 +608,17 @@ const main = async () => {
 
     while (!ok) {
         ok = await setup();
-    }
-
-    try {
-        console.log("initializing Ethers");
-        eth = await initEthers();
-        console.log("Ethers Ready!");
-        console.log("initializing Helia");
-        ipfs = await initHelia();
-        console.log("Helia Ready!");
-    } catch (error) {
-        console.error("Error initializing modules:", error);
+        try {
+            console.log("initializing Ethers");
+            eth = await initEthers();
+            console.log("Ethers Ready!");
+            console.log("initializing Helia");
+            ipfs = await initHelia();
+            console.log("Helia Ready!");
+        } catch (error) {
+            console.error("Error initializing modules:", error);
+            ok = false;
+        }
     }
 
     await menuOptions();
