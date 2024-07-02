@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-import fs from "fs";
+import chalk from "chalk";
 import {CID} from "multiformats/cid";
 import {multiaddr, isMultiaddr} from "@multiformats/multiaddr";
 import {peerIdFromString} from "@libp2p/peer-id";
@@ -62,18 +62,10 @@ const getStorageOrders = async () => {
 };
 
 const printLocalPeerData = async () => {
-    console.info("Helia is running");
     console.info("PeerId:", ipfs.node?.libp2p.peerId.toString());
     console.info("MultiAddress of this Node:");
     const addr = ipfs.node?.libp2p.getMultiaddrs();
     console.log(addr);
-};
-
-const printEthStruct = async () => {
-    console.log("Provider:", eth.provider);
-    console.log("Wallet address:", eth.wallet.address);
-    console.log("SFA address:", await eth.contracts.tokenERC20.getAddress());
-    console.log("Market Contract address:", await eth.contracts.marketERC721.getAddress());
 };
 
 const printDialedPeers = async () => {
@@ -192,10 +184,11 @@ const unPinCID = async (index: number) => {
     }
 };
 
-const closeHelia = async () => {
-    console.log("Closing session...");
+const turnOff = async () => {
+    console.log("Closing helias");
     await ipfs.node?.stop();
-    console.log("Good bye ;)");
+    console.log("✅ Done");
+    console.log("👋 See ya");
 };
 
 const balanceERC20 = async (address?: string) => {
@@ -256,11 +249,11 @@ const transferTokens = async (to: string, amount: string) => {
     }
 };
 
-const allowTokens = async (to: string, amount: string) => {
+const allowTokens = async (to: string, amount: number) => {
     const decimals = await eth.contracts.tokenERC20.decimals();
-    const tokenAmount = parseUnits(amount, decimals);
+    const tokenAmount = BigInt(amount * 10 ** decimals);
     try {
-        const tx = await eth.contracts.tokenERC20.approve(to, tokenAmount);
+        const tx = await eth.contracts.tokenERC20.approve(to, tokenAmount.toString());
         const receipt = await tx.wait();
         console.log(`The ${tokenAmount} Tokens were approved to ${to}\n  on TxID: (${receipt})`);
     } catch (error) {
@@ -268,26 +261,19 @@ const allowTokens = async (to: string, amount: string) => {
     }
 };
 
-const transferETH = async (to: string, amount: string) => {
-    const value = parseEther(amount);
-    const tx = {
-        to: to,
-        value: value,
-    };
-    try {
-        const txResponse = await eth.wallet.sendTransaction(tx);
-        const receipt = await txResponse.wait();
-        console.log(`The ${value} ETH were sent to ${to}\n  on TxID: (${receipt})`);
-    } catch (error) {
-        console.log("Error transferring ETH:", error);
-    }
-};
-
 const createSFA = async (vesting: number, cid: string, startTime: number, ttl: number) => {
     try {
+        const walletAddress = eth.wallet.address;
+        const marketAddress = await eth.contracts.marketERC721.getAddress();
+        const allowance = await eth.contracts.tokenERC20.allowance(walletAddress, marketAddress);
+
+        // check allowance, if it is not enough, we ask for allowance
+        if (BigInt(vesting) >= BigInt(allowance)) {
+            await allowTokens(marketAddress, vesting);
+        }
         const tx = await eth.contracts.marketERC721.createSFA(cid, vesting, startTime, ttl);
         const receipt = await tx.wait();
-        console.log(`SFA was registered on (${receipt.transactionHash})`);
+        console.log(`SFA was registered on, tx hash: (${receipt.transactionHash})`);
     } catch (error) {
         console.log("Error at Host Registry:", error);
     }
@@ -320,52 +306,41 @@ const hostSFA = async (sfaCounter: number) => {
 };
 
 const menuOptions = async () => {
+    console.log("\n"); // white line space
     const questions = [
         {
             type: "list",
             name: "option",
             message: "Select operation:",
             choices: [
-                {name: "Exit", value: "exit"},
-                {name: "Print menu", value: "printMenu"},
-                {name: "Get local node info", value: "getLocalNodeInfo"},
-                {name: "Get eth linked data", value: "getEthLinkedData"},
+                {name: "List active orders", value: "listActiveOrders"},
+                {name: "Get local IPFS node info", value: "getLocalNodeInfo"},
                 {name: "Get smart contract taken orders", value: "getSmartContractOrders"},
                 {name: "List dialed peers", value: "listDialedPeers"},
                 {name: "Dial a multiaddrs", value: "dialMultiaddrs"},
                 {name: "Dial a peerId", value: "dialPeerId"},
                 {name: "Hang up a peerId", value: "hangUpPeerId"},
-                {name: "List active orders", value: "listActiveOrders"},
                 {name: "Publish Data to IPFS", value: "publishDataToIPFS"},
-                {name: "Read IPFS Data", value: "readIPFSData"},
                 {name: "Pin a CID", value: "pinCID"},
                 {name: "Unpin a CID", value: "unpinCID"},
                 {name: "Account Balance", value: "accountBalance"},
                 {name: "Change Wallet", value: "changeWallet"},
                 {name: "Register & Dial Host", value: "registerDialHost"},
                 {name: "Fetch & Dial Host", value: "fetchDialHost"},
-                {name: "Transfer Tokens", value: "transferTokens"},
-                {name: "Transfer ETH", value: "transferETH"},
-                {name: "Allow Tokens to Market", value: "allowTokensToMarket"},
+                {name: "Approve Market to spend Tokens", value: "allowTokensToMarket"},
                 {name: "Publish SFA", value: "publishSFA"},
                 {name: "Host SFA", value: "hostSFA"},
+                {name: "Turn off", value: "turnOff"},
             ],
         },
     ];
 
     const actions: {[key: string]: any} = {
-        exit: async () => {
-            closeHelia();
-        },
-        printMenu: async () => {
-            menuOptions();
+        turnOff: async () => {
+            await turnOff();
         },
         getLocalNodeInfo: async () => {
             await printLocalPeerData();
-            menuOptions();
-        },
-        getEthLinkedData: async () => {
-            await printEthStruct();
             menuOptions();
         },
         getSmartContractOrders: async () => {
@@ -405,14 +380,6 @@ const menuOptions = async () => {
         publishDataToIPFS: async () => {
             const {data} = await inquirer.prompt([{type: "input", name: "data", message: "Please input Data:"}]);
             await pushData(data);
-            menuOptions();
-        },
-        readIPFSData: async () => {
-            await printNumerableOrders();
-            const {order} = await inquirer.prompt([
-                {type: "input", name: "order", message: "Please input a number of Order:"},
-            ]);
-            await getData(order);
             menuOptions();
         },
         pinCID: async () => {
@@ -471,17 +438,6 @@ const menuOptions = async () => {
                 {type: "input", name: "amount", message: "Please input the Tokens amount:"},
             ]);
             await transferTokens(to, amount);
-            await balanceERC20();
-            menuOptions();
-        },
-        transferETH: async () => {
-            const {to} = await inquirer.prompt([
-                {type: "input", name: "to", message: "Please input an Ethereum Address:"},
-            ]);
-            const {amount} = await inquirer.prompt([
-                {type: "input", name: "amount", message: "Please input the ETH amount:"},
-            ]);
-            await transferETH(to, amount);
             await balanceERC20();
             menuOptions();
         },
@@ -609,18 +565,27 @@ const main = async () => {
     while (!ok) {
         ok = await setup();
         try {
-            console.log("initializing Ethers");
+            console.log(chalk.whiteBright.bold("Initializing Ethers"));
             eth = await initEthers();
-            console.log("Ethers Ready!");
-            console.log("initializing Helia");
+            console.log(`${chalk.white.bold("✅ Ethers Ready!")}
+- ${chalk.bold("provider:")} ${chalk.gray(CONSTANTS.PROVIDER_URL)}
+- ${chalk.bold("Wallet address:")} ${chalk.gray(eth.wallet.address)}
+- ${chalk.bold("SFA address:")} ${chalk.gray(await eth.contracts.tokenERC20.getAddress())}
+- ${chalk.bold("Market Contract address:")} ${chalk.gray(await eth.contracts.marketERC721.getAddress())}
+`);
+
+            console.log(chalk.whiteBright.bold("Initializing Helia"));
             ipfs = await initHelia();
-            console.log("Helia Ready!");
+            const multiaddresses: string[] = ipfs.node?.libp2p.getMultiaddrs();
+            console.log(`${chalk.white.bold("✅ Helia Ready!")}
+- ${chalk.bold("PeerId")} ${chalk.gray(ipfs.node?.libp2p.peerId.toString())});
+- ${chalk.bold("MultiAddress of your local IPFS Node")} \n${chalk.gray(multiaddresses.join("\n"))}
+`);
         } catch (error) {
             console.error("Error initializing modules:", error);
             ok = false;
         }
     }
-
     await menuOptions();
 };
 
