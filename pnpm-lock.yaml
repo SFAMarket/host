@@ -81,6 +81,9 @@ importers:
       '@types/luxon':
         specifier: ^3.4.2
         version: 3.4.2
+      '@types/node':
+        specifier: ^20.14.9
+        version: 20.14.9
       cross-env:
         specifier: ^7.0.3
         version: 7.0.3
