@@ -22,5 +22,4 @@ export const updateEnvFile = (key: string, value: string, filename = "../../.env
     });
     if (!keyFound) updatedLines.push(`${key}=${value}`);
     fs.writeFileSync(filePath, updatedLines.join("\n"), "utf8");
-    console.log(`Updated ${key} to ${value} in .env file.`);
 };
