@@ -578,8 +578,8 @@ const main = async () => {
             ipfs = await initHelia();
             const multiaddresses: string[] = ipfs.node?.libp2p.getMultiaddrs();
             console.log(`${chalk.white.bold("✅ Helia Ready!")}
-- ${chalk.bold("PeerId")} ${chalk.gray(ipfs.node?.libp2p.peerId.toString())});
-- ${chalk.bold("MultiAddress of your local IPFS Node")} \n${chalk.gray(multiaddresses.join("\n"))}
+- ${chalk.bold("PeerId:")} ${chalk.gray(ipfs.node?.libp2p.peerId.toString())}
+- ${chalk.bold("MultiAddress of your local IPFS Node:")} \n${chalk.gray(multiaddresses.join("\n"))}
 `);
         } catch (error) {
             console.error("Error initializing modules:", error);
