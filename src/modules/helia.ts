@@ -1,6 +1,6 @@
-import {createHelia} from "helia";
-import {unixfs} from "@helia/unixfs";
-import {createLibp2p} from "libp2p";
+import {HeliaLibp2p, createHelia} from "helia";
+import {unixfs, UnixFS} from "@helia/unixfs";
+import {Libp2p, createLibp2p} from "libp2p";
 import {tcp} from "@libp2p/tcp";
 import {identify} from "@libp2p/identify";
 import {gossipsub} from "@chainsafe/libp2p-gossipsub";
@@ -11,6 +11,8 @@ import {webSockets} from "@libp2p/websockets";
 import * as filters from "@libp2p/websockets/filters";
 import {circuitRelayServer} from "@libp2p/circuit-relay-v2";
 import {MemoryDatastore} from "datastore-core";
+
+import {IpfsStruct} from "../../types/interfaces.ts";
 
 const datastore = new MemoryDatastore();
 
@@ -35,9 +37,9 @@ const Libp2pOptions = {
     },
 };
 
-export default async function initHelia() {
-    const libp2p = await createLibp2p(Libp2pOptions);
-    const node = await createHelia({libp2p});
-    const fs = unixfs(node);
+export default async function initHelia(): Promise<IpfsStruct> {
+    const libp2p: Libp2p = await createLibp2p(Libp2pOptions);
+    const node: HeliaLibp2p<Libp2p> = await createHelia({libp2p});
+    const fs: UnixFS = unixfs(node);
     return {node, fs};
 }
