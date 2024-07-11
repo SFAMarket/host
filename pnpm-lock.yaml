@@ -44,6 +44,12 @@ importers:
       '@multiformats/multiaddr':
         specifier: ^12.2.3
         version: 12.3.0
+      '@types/bytes':
+        specifier: ^3.1.4
+        version: 3.1.4
+      bytes:
+        specifier: ^3.1.2
+        version: 3.1.2
       chalk:
         specifier: ^5.3.0
         version: 5.3.0
@@ -1257,6 +1263,9 @@ packages:
   '@types/body-parser@1.19.5':
     resolution: {integrity: sha512-fB3Zu92ucau0iQ0JMCFQE7b/dv8Ot07NI3KaZIkIUNXq82k4eBAqUaneXfleGY9JWskeS9y+u0nXMyspcuQrCg==}
 
+  '@types/bytes@3.1.4':
+    resolution: {integrity: sha512-A0uYgOj3zNc4hNjHc5lYUfJQ/HVyBXiUMKdXd7ysclaE6k9oJdavQzODHuwjpUu2/boCP8afjQYi8z/GtvNCWA==}
+
   '@types/connect@3.4.38':
     resolution: {integrity: sha512-K6uROf1LD88uDQqJCktA4yzL1YYAK6NgfsI0v/mTgyPKWsX1CnJ0XPSDhViejru1GcRkLWb8RlzFYJRqGUbaug==}
 
@@ -1505,6 +1514,10 @@ packages:
 
   bytes@3.0.0:
     resolution: {integrity: sha512-pMhOfFDPiv9t5jjIXkHosWmkSyQbvsgEVNkz0ERHbuLh2T/7j4Mqqpz523Fe8MVY89KC6Sh/QfS2sM+SjgFDcw==}
+    engines: {node: '>= 0.8'}
+
+  bytes@3.1.2:
+    resolution: {integrity: sha512-/Nf7TyzTx6S3yRJObOAV7956r8cr2+Oj8AC5dt8wSP3BQAoeX58NoHyCU8P8zGkNXStjTSi6fzO6F0pBdcYbEg==}
     engines: {node: '>= 0.8'}
 
   caller-callsite@2.0.0:
@@ -5604,6 +5617,8 @@ snapshots:
       '@types/connect': 3.4.38
       '@types/node': 20.14.9
 
+  '@types/bytes@3.1.4': {}
+
   '@types/connect@3.4.38':
     dependencies:
       '@types/node': 20.14.9
@@ -5895,6 +5910,8 @@ snapshots:
       ieee754: 1.2.1
 
   bytes@3.0.0: {}
+
+  bytes@3.1.2: {}
 
   caller-callsite@2.0.0:
     dependencies:

@@ -1,51 +1,23 @@
 /* eslint-disable no-console */
 import chalk from "chalk";
+import bytes from "bytes";
 import {CID} from "multiformats/cid";
-import {multiaddr, isMultiaddr} from "@multiformats/multiaddr";
+import {multiaddr, isMultiaddr, Multiaddr} from "@multiformats/multiaddr";
 import {peerIdFromString} from "@libp2p/peer-id";
 import {PeerId} from "@libp2p/interface";
 import initEthers from "./modules/ethers.ts";
 import initHelia from "./modules/helia.ts";
-import {JsonRpcProvider, Wallet, Contract, formatUnits, formatEther, parseUnits, parseEther, ethers} from "ethers";
+import {formatUnits, formatEther, parseUnits, ethers} from "ethers";
 import inquirer from "inquirer";
 import {DateTime} from "luxon";
 import * as utils from "./modules/utils.ts";
 import * as CONSTANTS from "./config/constants.ts";
+import {EthersStruct, IpfsStruct, SFA} from "../types/interfaces.ts";
+import {UnixFSStats} from "@helia/unixfs";
 
-interface EthersStruct {
-    provider: JsonRpcProvider;
-    wallet: Wallet;
-    contracts: {
-        tokenERC20: Contract;
-        marketERC721: Contract;
-    };
-}
-
-// interface ipfsStruct {
-//     node: HeliaLibp2p;
-//     fs: UnixFS;
-// }
-
-interface Host {
-    status: string;
-    multiAddrs: string;
-}
-
-interface SFA {
-    publisher: string;
-    cid: string;
-    vesting: string;
-    vested: string;
-    startTime: string;
-    ttl: string;
-    status: string;
-    host: string;
-    pendingHost: string;
-    collateral: string;
-}
-
+let interval: NodeJS.Timeout;
 let eth: EthersStruct;
-let ipfs: any;
+let ipfs: IpfsStruct;
 let dialedPeers: PeerId[] = [];
 let storageOrders: CID[] = [];
 let SFAs: SFA[] = [];
@@ -54,13 +26,9 @@ let SFAs: SFA[] = [];
  * Actions
  */
 
-const getStorageOrders = async () => {
-    const sfaAddress = await eth.contracts.tokenERC20.getAddress();
-    console.log("Greeting from contract SFA:", sfaAddress);
-    const marketAddress = await eth.contracts.marketERC721.getAddress();
-    console.log("Greeting from contract Market:", marketAddress);
-};
-
+/**
+ * IPFS actions
+ */
 const printLocalPeerData = async () => {
     console.info("PeerId:", ipfs.node?.libp2p.peerId.toString());
     console.info("MultiAddress of this Node:");
@@ -114,20 +82,6 @@ const hangUpAPeer = async (index: string) => {
     }
 };
 
-const printNumerableOrders = async () => {
-    try {
-        if (storageOrders.length > 0) {
-            for (let [index, element] of storageOrders.entries()) {
-                console.log(`${index} order has CID: ${element.toString()}`);
-            }
-        } else {
-            console.log("No Stored Orders");
-        }
-    } catch (error) {
-        console.log("Error:", error);
-    }
-};
-
 const pushData = async (data: string) => {
     const encoder = new TextEncoder();
     const cid = await ipfs.fs.addBytes(encoder.encode(data), {
@@ -138,25 +92,6 @@ const pushData = async (data: string) => {
     storageOrders.push(cid);
     console.log("Added file:", cid.toString());
     return cid.toString();
-};
-
-const getData = async (orderIdx: string) => {
-    const decoder = new TextDecoder();
-    const selectedOrder = storageOrders[Number(orderIdx)];
-    let text = "";
-
-    for await (const chunk of ipfs.fs.cat(selectedOrder, {
-        onProgress: (evt: any) => {
-            console.info("cat event", evt.type, evt.detail);
-        },
-    })) {
-        text += decoder.decode(chunk, {
-            stream: true,
-        });
-    }
-
-    console.log(`Data from: ${selectedOrder.toString()}`);
-    console.log(text);
 };
 
 const pinCID = async (cidString: string) => {
@@ -170,7 +105,7 @@ const pinCID = async (cidString: string) => {
     }
 };
 
-const unPinCID = async (index: number) => {
+const unpinCID = async (index: number) => {
     const idxNum = +index;
     let cid2Unpin = storageOrders[index];
     try {
@@ -184,28 +119,48 @@ const unPinCID = async (index: number) => {
     }
 };
 
-const turnOff = async () => {
+const getCIDStats = async (cid: string) => {
+    // example: QmWBaeu6y1zEcKbsEqCuhuDHPL3W8pZouCPdafMCRCSUWk
+    try {
+        const stats: UnixFSStats = await ipfs.fs.stat(CID.parse(cid));
+        console.log(`CID: ${cid}`);
+        console.log(`type: ${stats.type}`);
+        console.log(`Dag size: ${bytes(stats.dagSize)}`);
+        console.log(`File size: ${bytes(stats.fileSize)}`);
+    } catch (error) {
+        console.log({error});
+    }
+};
+
+const turnOffHelia = async () => {
     console.log("Closing helias");
     await ipfs.node?.stop();
     console.log("✅ Done");
     console.log("👋 See ya");
 };
 
-const balanceERC20 = async (address?: string) => {
-    const walletAddress = address || (await eth.wallet.getAddress());
-    const decimals = await eth.contracts.tokenERC20.decimals();
-    const sfaBalance = await eth.contracts.tokenERC20.balanceOf(walletAddress);
-    console.log("SFA Balance:", formatUnits(sfaBalance.toString(), decimals));
-    const ethBalance = await eth.provider.getBalance(walletAddress);
-    console.log("ETH Balance:", formatEther(ethBalance));
+/**
+ * SFA Market
+ */
+const turnOnInterval = () => {
+    interval = setInterval(autoHost, 1000);
 };
 
-const importPKey = async (pKey: string) => {
+const createSFA = async (vesting: number, cid: string, startTime: number, ttl: number) => {
     try {
-        eth = await initEthers(pKey);
-        console.log("new EOAccount is:", eth.wallet.getAddress());
+        const walletAddress = eth.wallet.address;
+        const marketAddress = await eth.contracts.marketERC721.getAddress();
+        const allowance = await eth.contracts.tokenERC20.allowance(walletAddress, marketAddress);
+
+        // check allowance, if it is not enough, we ask for allowance
+        if (BigInt(vesting) >= BigInt(allowance)) {
+            await approveToken(marketAddress, vesting);
+        }
+        const tx = await eth.contracts.marketERC721.createSFA(cid, vesting, startTime, ttl);
+        const receipt = await tx.wait();
+        console.log(`SFA was registered on, tx hash: (${receipt.transactionHash})`);
     } catch (error) {
-        console.log("Error on importPKey:", error);
+        console.log("Error at Host Registry:", error);
     }
 };
 
@@ -217,6 +172,55 @@ const registerHost = async (multiAddrs: string) => {
         await dialAMultiaddr(multiAddrs);
     } catch (error) {
         console.log("Error at Host Registry:", error);
+    }
+};
+
+/**
+ * auto Host
+ * @description check available SFA that match with preferences
+ */
+const autoHost = async () => {
+    try {
+    } catch (error) {
+        console.log("Error at auto host:", error);
+    }
+};
+
+/**
+ * Fetch SFAs
+ * @description fetch SFA from Market and stored in SFA global Variable.
+ */
+const fetchSFAs = async () => {
+    try {
+        // use multicall to get all SFAs
+    } catch (error) {
+        console.log("Error at fetching a host:", error);
+    }
+};
+
+const hostSFA = async (sfaCounter: number) => {
+    try {
+        await eth.contracts.marketERC721.claimHost(sfaCounter);
+        const sfa = await eth.contracts.marketERC721.sfas(sfaCounter);
+        if (sfa === null) {
+            throw new Error("Failed to fetch the latest block.");
+        }
+        const sfaStruct: SFA = {
+            publisher: sfa[0],
+            cid: sfa[1],
+            vesting: sfa[2],
+            vested: sfa[3],
+            startTime: sfa[4],
+            ttl: sfa[5],
+            status: sfa[6],
+            host: sfa[7],
+            pendingHost: sfa[8],
+            collateral: sfa[9],
+        };
+        await pinCID(sfaStruct.cid);
+        console.log(`SFA hosted with cid ${sfaStruct.cid} and sfaCounter: ${sfaCounter}`);
+    } catch (error) {
+        console.log("Error at fetching a host:", error);
     }
 };
 
@@ -237,6 +241,19 @@ const fetchHost = async (addrs: string) => {
     }
 };
 
+/**
+ * Wallet
+ */
+
+const balanceERC20 = async (address?: string) => {
+    const walletAddress = address || (await eth.wallet.getAddress());
+    const decimals = await eth.contracts.tokenERC20.decimals();
+    const sfaBalance = await eth.contracts.tokenERC20.balanceOf(walletAddress);
+    console.log("SFA Balance:", formatUnits(sfaBalance.toString(), decimals));
+    const ethBalance = await eth.provider.getBalance(walletAddress);
+    console.log("ETH Balance:", formatEther(ethBalance));
+};
+
 const transferTokens = async (to: string, amount: string) => {
     const decimals = await eth.contracts.tokenERC20.decimals();
     const tokenAmount = parseUnits(amount, decimals);
@@ -249,7 +266,18 @@ const transferTokens = async (to: string, amount: string) => {
     }
 };
 
-const allowTokens = async (to: string, amount: number) => {
+const approveTokenMax = async (to: string) => {
+    const tokenAmount = ethers.MaxUint256;
+    try {
+        const tx = await eth.contracts.tokenERC20.approve(to, tokenAmount.toString());
+        const receipt = await tx.wait();
+        console.log(`The ${tokenAmount} Tokens were approved to ${to}\n  on TxID: (${receipt})`);
+    } catch (error) {
+        console.log("Error transferring tokens:", error);
+    }
+};
+
+const approveToken = async (to: string, amount: number) => {
     const decimals = await eth.contracts.tokenERC20.decimals();
     const tokenAmount = BigInt(amount * 10 ** decimals);
     try {
@@ -261,49 +289,9 @@ const allowTokens = async (to: string, amount: number) => {
     }
 };
 
-const createSFA = async (vesting: number, cid: string, startTime: number, ttl: number) => {
-    try {
-        const walletAddress = eth.wallet.address;
-        const marketAddress = await eth.contracts.marketERC721.getAddress();
-        const allowance = await eth.contracts.tokenERC20.allowance(walletAddress, marketAddress);
-
-        // check allowance, if it is not enough, we ask for allowance
-        if (BigInt(vesting) >= BigInt(allowance)) {
-            await allowTokens(marketAddress, vesting);
-        }
-        const tx = await eth.contracts.marketERC721.createSFA(cid, vesting, startTime, ttl);
-        const receipt = await tx.wait();
-        console.log(`SFA was registered on, tx hash: (${receipt.transactionHash})`);
-    } catch (error) {
-        console.log("Error at Host Registry:", error);
-    }
-};
-
-const hostSFA = async (sfaCounter: number) => {
-    try {
-        await eth.contracts.marketERC721.claimHost(sfaCounter);
-        const sfa = await eth.contracts.marketERC721.sfas(sfaCounter);
-        if (sfa === null) {
-            throw new Error("Failed to fetch the latest block.");
-        }
-        const sfaStruct = {
-            publisher: sfa[0],
-            cid: sfa[1],
-            vesting: sfa[2],
-            vested: sfa[3],
-            startTime: sfa[4],
-            ttl: sfa[5],
-            status: sfa[6],
-            host: sfa[7],
-            pendingHost: sfa[8],
-            collateral: sfa[9],
-        };
-        await pinCID(sfaStruct.cid);
-        console.log(`SFA hosted with cid ${sfaStruct.cid} and sfaCounter: ${sfaCounter}`);
-    } catch (error) {
-        console.log("Error at fetching a host:", error);
-    }
-};
+/**
+ * Main Actions
+ */
 
 const menuOptions = async () => {
     console.log("\n"); // white line space
@@ -313,173 +301,252 @@ const menuOptions = async () => {
             name: "option",
             message: "Select operation:",
             choices: [
-                {name: "List active orders", value: "listActiveOrders"},
+                new inquirer.Separator("--- IPFS ---"),
+                {name: "Pin a CID", value: "pinCID"},
+                {name: "Unpin a CID", value: "unpinCID"},
+                {name: "Get CID stats", value: "getCIDStats"},
                 {name: "Get local IPFS node info", value: "getLocalNodeInfo"},
-                {name: "Get smart contract taken orders", value: "getSmartContractOrders"},
                 {name: "List dialed peers", value: "listDialedPeers"},
                 {name: "Dial a multiaddrs", value: "dialMultiaddrs"},
                 {name: "Dial a peerId", value: "dialPeerId"},
                 {name: "Hang up a peerId", value: "hangUpPeerId"},
                 {name: "Publish Data to IPFS", value: "publishDataToIPFS"},
-                {name: "Pin a CID", value: "pinCID"},
-                {name: "Unpin a CID", value: "unpinCID"},
-                {name: "Account Balance", value: "accountBalance"},
-                {name: "Change Wallet", value: "changeWallet"},
+                new inquirer.Separator("--- SFA Market ---"),
+                {name: "Turn on/off Auto Host", value: "turnOnAutoHost"},
+                {name: "Publish SFA", value: "publishSFA"},
+                {name: "Fetch SFAs", value: "fetchSFAs"},
+                {name: "Host SFA", value: "hostSFA"},
                 {name: "Register & Dial Host", value: "registerDialHost"},
                 {name: "Fetch & Dial Host", value: "fetchDialHost"},
-                {name: "Approve Market to spend Tokens", value: "allowTokensToMarket"},
-                {name: "Publish SFA", value: "publishSFA"},
-                {name: "Host SFA", value: "hostSFA"},
-                {name: "Turn off", value: "turnOff"},
+                new inquirer.Separator("--- Wallet ---"),
+                {name: "Approve SFA Market to Max spend tokens", value: "approveTokenMax"},
+                {name: "Approve custom Address to Spend tokens", value: "approveToken"},
+                {name: "Account Balance", value: "accountBalance"},
+                new inquirer.Separator("--- Helia ---"),
+                {name: "exit", value: "turnOffHelia"},
             ],
         },
     ];
 
     const actions: {[key: string]: any} = {
-        turnOff: async () => {
-            await turnOff();
+        turnOffHelia: async () => {
+            await turnOffHelia();
         },
-        getLocalNodeInfo: async () => {
-            await printLocalPeerData();
+        getCIDStats: async () => {
+            try {
+                const {cid} = await inquirer.prompt([{type: "input", name: "cid", message: "Please input CID:"}]);
+                await getCIDStats(cid);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
-        getSmartContractOrders: async () => {
-            await getStorageOrders();
+        getLocalNodeInfo: async () => {
+            try {
+                await printLocalPeerData();
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         listDialedPeers: async () => {
-            await printDialedPeers();
+            try {
+                await printDialedPeers();
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         dialMultiaddrs: async () => {
-            const {addrs} = await inquirer.prompt([
-                {type: "input", name: "addrs", message: "Please input the peer multiaddrs:"},
-            ]);
-            await dialAMultiaddr(addrs);
+            try {
+                const {addrs} = await inquirer.prompt([
+                    {type: "input", name: "addrs", message: "Please input the peer multiaddrs:"},
+                ]);
+                await dialAMultiaddr(addrs);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         dialPeerId: async () => {
-            const {addrs} = await inquirer.prompt([
-                {type: "input", name: "addrs", message: "Please input the peerID:"},
-            ]);
-            await dialAPeerID(addrs);
+            try {
+                const {addrs} = await inquirer.prompt([
+                    {type: "input", name: "addrs", message: "Please input the peerID:"},
+                ]);
+                await dialAPeerID(addrs);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         hangUpPeerId: async () => {
-            printNumerableDialedPeers();
-            const {addrs} = await inquirer.prompt([
-                {type: "input", name: "addrs", message: "Please input a number to hang up:"},
-            ]);
-            await hangUpAPeer(addrs);
-            menuOptions();
-        },
-        listActiveOrders: async () => {
-            await printNumerableOrders();
+            try {
+                printNumerableDialedPeers();
+                const {addrs} = await inquirer.prompt([
+                    {type: "input", name: "addrs", message: "Please input a number to hang up:"},
+                ]);
+                await hangUpAPeer(addrs);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         publishDataToIPFS: async () => {
-            const {data} = await inquirer.prompt([{type: "input", name: "data", message: "Please input Data:"}]);
-            await pushData(data);
+            try {
+                const {data} = await inquirer.prompt([{type: "input", name: "data", message: "Please input Data:"}]);
+                await pushData(data);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         pinCID: async () => {
-            const {cidString} = await inquirer.prompt([
-                {type: "input", name: "cidString", message: "Please input CID to pin:"},
-            ]);
-            await pinCID(cidString);
+            try {
+                const {cidString} = await inquirer.prompt([
+                    {type: "input", name: "cidString", message: "Please input CID to pin:"},
+                ]);
+                await pinCID(cidString);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         unpinCID: async () => {
-            await printNumerableOrders();
-            const {index} = await inquirer.prompt([
-                {type: "input", name: "index", message: "Please input a number to unpin:"},
-            ]);
-            await unPinCID(index);
+            try {
+                const {index} = await inquirer.prompt([
+                    {type: "input", name: "index", message: "Please input a number to unpin:"},
+                ]);
+                await unpinCID(index);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         accountBalance: async () => {
-            const {account} = await inquirer.prompt([
-                {
-                    type: "input",
-                    name: "account",
-                    message: "Please input an ethereum address:",
-                    default: `${await eth.wallet.getAddress()}`,
-                },
-            ]);
-            await balanceERC20(account);
-            menuOptions();
-        },
-        changeWallet: async () => {
-            const {pKey} = await inquirer.prompt([
-                {type: "input", name: "pKey", message: "Please input a private key:"},
-            ]);
-            await importPKey(pKey);
+            try {
+                const {account} = await inquirer.prompt([
+                    {
+                        type: "input",
+                        name: "account",
+                        message: "Please input an ethereum address:",
+                        default: `${await eth.wallet.getAddress()}`,
+                    },
+                ]);
+                await balanceERC20(account);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         registerDialHost: async () => {
-            const {addrs} = await inquirer.prompt([
-                {type: "input", name: "addrs", message: "Please input a host multiaddr:"},
-            ]);
-            await registerHost(addrs);
+            try {
+                const {addrs} = await inquirer.prompt([
+                    {type: "input", name: "addrs", message: "Please input a host multiaddr:"},
+                ]);
+                await registerHost(addrs);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         fetchDialHost: async () => {
-            const {addrs} = await inquirer.prompt([
-                {type: "input", name: "addrs", message: "Please input a host eth Address:"},
-            ]);
-            await fetchHost(addrs);
+            try {
+                const {addrs} = await inquirer.prompt([
+                    {type: "input", name: "addrs", message: "Please input a host eth Address:"},
+                ]);
+                await fetchHost(addrs);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         transferTokens: async () => {
-            const {to} = await inquirer.prompt([
-                {type: "input", name: "to", message: "Please input an Ethereum Address:"},
-            ]);
-            const {amount} = await inquirer.prompt([
-                {type: "input", name: "amount", message: "Please input the Tokens amount:"},
-            ]);
-            await transferTokens(to, amount);
-            await balanceERC20();
+            try {
+                const {to} = await inquirer.prompt([
+                    {type: "input", name: "to", message: "Please input an Ethereum Address:"},
+                ]);
+                const {amount} = await inquirer.prompt([
+                    {type: "input", name: "amount", message: "Please input the Tokens amount:"},
+                ]);
+                await transferTokens(to, amount);
+                await balanceERC20();
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
-        allowTokensToMarket: async () => {
-            const {amount} = await inquirer.prompt([
-                {type: "input", name: "amount", message: "Please input the Tokens amount to allow:"},
-            ]);
-            await allowTokens(await eth.contracts.marketERC721.getAddress(), amount);
+        approveTokenMax: async () => {
+            try {
+                const {ok} = await inquirer.prompt([
+                    {type: "confirm", name: "ok", message: "Approve Market to Max Spend Token: "},
+                ]);
+                if (ok) {
+                    await approveTokenMax(await eth.contracts.marketERC721.getAddress());
+                } else {
+                    console.log("approve canceled");
+                }
+            } catch (error) {
+                console.log("catch error:", error);
+            }
+            menuOptions();
+        },
+        approveToken: async () => {
+            try {
+                const martketAddress = await eth.contracts.marketERC721.getAddress();
+                const {amount, target} = await inquirer.prompt([
+                    {
+                        type: "input",
+                        name: "target",
+                        message: "Address allow to spend:",
+                        default: `${martketAddress}`,
+                        validate: (input: string) => {
+                            if (ethers.isHexString(input) && input.length === 42) {
+                                return true;
+                            } else {
+                                return "wrong private key format";
+                            }
+                        },
+                    },
+                    {type: "number", name: "amount", message: "Please input the Tokens amount to allow:"},
+                ]);
+                await approveToken(target, amount);
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
         publishSFA: async () => {
-            const {data} = await inquirer.prompt([{type: "input", name: "data", message: "Please input Data:"}]);
-            const {vesting} = await inquirer.prompt([
-                {type: "input", name: "vesting", message: "Please input vesting amount:"},
-            ]);
-
-            const {_startTime} = await inquirer.prompt([
-                {
-                    type: "input",
-                    name: "_startTime",
-                    message: "Please input start time format in UTC ( AAAA-MM-DD hh:mm:ss ):",
-                },
-            ]);
-            let startTime = DateTime.fromFormat(_startTime, "yyyy-MM-dd HH:mm:ss").toUnixInteger();
-
-            const {_endTime} = await inquirer.prompt([
-                {
-                    type: "input",
-                    name: "_endTime",
-                    validate: (input, answer) => {
-                        let endTime = DateTime.fromFormat(input, "yyyy-MM-dd HH:mm:ss").toUnixInteger();
-                        if (endTime > startTime) return true;
-                        return "end-time should be older than start-time";
-                    },
-                    message: "Please input end time format in UTC ( AAAA-MM-DD hh:mm:ss ):",
-                },
-            ]);
-
-            let endTime = DateTime.fromFormat(_endTime, "yyyy-MM-dd HH:mm:ss").toUnixInteger();
-            const ttl = endTime - startTime;
-
             try {
+                const {data} = await inquirer.prompt([{type: "input", name: "data", message: "Please input Data:"}]);
+                const {vesting} = await inquirer.prompt([
+                    {type: "input", name: "vesting", message: "Please input vesting amount:"},
+                ]);
+
+                const {_startTime} = await inquirer.prompt([
+                    {
+                        type: "input",
+                        name: "_startTime",
+                        message: "Please input start time format in UTC ( AAAA-MM-DD hh:mm:ss ):",
+                    },
+                ]);
+                let startTime = DateTime.fromFormat(_startTime, "yyyy-MM-dd HH:mm:ss").toUnixInteger();
+
+                const {_endTime} = await inquirer.prompt([
+                    {
+                        type: "input",
+                        name: "_endTime",
+                        validate: (input, answer) => {
+                            let endTime = DateTime.fromFormat(input, "yyyy-MM-dd HH:mm:ss").toUnixInteger();
+                            if (endTime > startTime) return true;
+                            return "end-time should be older than start-time";
+                        },
+                        message: "Please input end time format in UTC ( AAAA-MM-DD hh:mm:ss ):",
+                    },
+                ]);
+
+                let endTime = DateTime.fromFormat(_endTime, "yyyy-MM-dd HH:mm:ss").toUnixInteger();
+                const ttl = endTime - startTime;
+
                 await pushData(data);
                 let cid = storageOrders[storageOrders.length - 1].toString();
 
@@ -490,10 +557,14 @@ const menuOptions = async () => {
             menuOptions();
         },
         hostSFA: async () => {
-            const {sfaId} = await inquirer.prompt([
-                {type: "input", name: "sfaId", message: "Please input SFA index nunmber:"},
-            ]);
-            await hostSFA(Number(sfaId));
+            try {
+                const {sfaId} = await inquirer.prompt([
+                    {type: "input", name: "sfaId", message: "Please input SFA index nunmber:"},
+                ]);
+                await hostSFA(Number(sfaId));
+            } catch (error) {
+                console.log("catch error:", error);
+            }
             menuOptions();
         },
     };
@@ -511,12 +582,25 @@ const menuOptions = async () => {
 const setup = async () => {
     const questions = [
         {
+            name: "PROVIDER_URL",
+            type: "input",
+            message: "Provider JSON RPC url:",
+            default: `${CONSTANTS.PROVIDER_URL}`,
+            validate: (value: string) => {
+                if (value.length) {
+                    return true;
+                } else {
+                    return "Please enter your name";
+                }
+            },
+        },
+        {
             name: "PRIVATE_KEY",
             type: "password",
             mask: "*",
-            message: `Enter a host private key (0x${"*".repeat(
-                CONSTANTS.PRIVATE_KEY.length - 3
-            )}${CONSTANTS.PRIVATE_KEY.slice(-6)})`,
+            message: `Enter a host private key ${chalk.dim(
+                "(0x" + "*".repeat(CONSTANTS.PRIVATE_KEY.length - 3)
+            )}${chalk.dim(CONSTANTS.PRIVATE_KEY.slice(-6) + ")")}`,
             default: `${CONSTANTS.PRIVATE_KEY}`,
             validate: (input: string) => {
                 if (ethers.isHexString(input)) {
@@ -532,31 +616,114 @@ const setup = async () => {
         {
             name: "savePrivateKey",
             type: "confirm",
-            message: "save private key in local file? (Y/n)",
+            message: "save private key in .env file? (Y/n)",
         },
         {
-            name: "PROVIDER_URL",
-            type: "input",
-            message: "Provider JSON RPC url:",
-            default: `${CONSTANTS.PROVIDER_URL}`,
-            validate: (value: string) => {
-                if (value.length) {
-                    return true;
-                } else {
-                    return "Please enter your name";
-                }
-            },
-        },
-        {
+            name: "AUTO_HOST",
             type: "confirm",
-            name: "ok",
-            message: "confirm to start? (Y/n)",
+            mask: "*",
+            message: `Want to auto host?`,
+            default: CONSTANTS.AUTO_HOST,
         },
     ];
 
+    console.log(`
+${chalk.bold.whiteBright("👋 Hello there!")}
+${chalk.gray("this is a fast setup for your host in SFA.")}
+${chalk.gray("follow questions to start hosting.")}
+`);
+
     const res = await inquirer.prompt(questions);
     if (res.savePrivateKey) utils.updateEnvFile("PRIVATE_KEY", res.PRIVATE_KEY);
-    return res.ok;
+    if (typeof res.AUTO_HOST == "boolean") utils.updateEnvFile("AUTO_HOST", res.AUTO_HOST);
+
+    // Inner loop for config auto host
+    if (res.AUTO_HOST === true) {
+        console.log(chalk.white.bold("Set Up Auto Host preferences:"));
+        let ok: boolean = false;
+        const questions = [
+            {
+                name: "BYTE_PER_VESTING",
+                type: "number",
+                message: `Byte Per Vesting?`,
+                default: CONSTANTS.BYTE_PER_VESTING,
+            },
+            {
+                name: "MIN_VESTING_REWARDS",
+                type: "number",
+                message: `Minimum Vesting Rewards:`,
+                default: CONSTANTS.MIN_COLLATERAL_RATIO_BPS,
+            },
+            {
+                name: "MAX_COLLATERAL_RAITO_BPS",
+                type: "number",
+                message: `Maximum Collateral Ratio in BPS ${chalk.gray("( 10e3 = 100 %) ")}`,
+                default: CONSTANTS.MAX_COLLATERAL_RAITO_BPS,
+            },
+            {
+                name: "MAX_CID_SIZE",
+                type: "string",
+                message: `Maximum CID Size`,
+                validate: (input: string) => {
+                    try {
+                        const regex = /^\d+(\.\d+)?\s?(B|KB|MB|GB|TB|PB|EB|ZB|YB)$/i;
+                        if (regex.test(input)) return true;
+                        return "wrong format";
+                    } catch (error) {
+                        return "wrong format";
+                    }
+                },
+                default: CONSTANTS.MAX_CID_SIZE,
+            },
+            {
+                name: "MAX_DISK_USE",
+                type: "string",
+                message: `Maximum Disk Use:`,
+                validate: (input: string) => {
+                    try {
+                        const regex = /^\d+(\.\d+)?\s?(B|KB|MB|GB|TB|PB|EB|ZB|YB)$/i;
+                        if (regex.test(input)) return true;
+                        return "wrong format";
+                    } catch (error) {
+                        return "wrong format";
+                    }
+                },
+                default: CONSTANTS.MAX_DISK_USE,
+            },
+        ];
+        while (!ok) {
+            const res = await inquirer.prompt(questions);
+            console.log(`
+${chalk.bold("BYTE_PER_VESTING:")} ${chalk.dim(res.BYTE_PER_VESTING)}
+${chalk.bold("MAX_COLLATERAL_RAITO_BPS:")} ${chalk.dim(res.MAX_COLLATERAL_RAITO_BPS)}
+${chalk.bold("MAX_CID_SIZE:")} ${chalk.dim(res.MAX_CID_SIZE)}
+${chalk.bold("MAX_DISK_USE:")} ${chalk.dim(res.MAX_DISK_USE)}
+            `);
+            const confirm = await inquirer.prompt([
+                {
+                    type: "confirm",
+                    name: "ok",
+                    message: "confirm values (Y/n)",
+                },
+            ]);
+            ok = confirm.ok;
+            if (ok) {
+                if (res.BYTE_PER_VESTING) utils.updateEnvFile("BYTE_PER_VESTING", res.BYTE_PER_VESTING);
+                if (res.MAX_COLLATERAL_RAITO_BPS)
+                    utils.updateEnvFile("MAX_COLLATERAL_RAITO_BPS", res.MAX_COLLATERAL_RAITO_BPS);
+                if (res.MAX_CID_SIZE) utils.updateEnvFile("MAX_CID_SIZE", res.MAX_CID_SIZE);
+                if (res.MAX_DISK_USE) utils.updateEnvFile("MAX_DISK_USE", res.MAX_DISK_USE);
+            }
+        }
+    }
+    const {ok} = await inquirer.prompt([
+        {
+            type: "confirm",
+            name: "ok",
+            message: "Ready to start? (Y/n)",
+        },
+    ]);
+    return ok;
 };
 
 const main = async () => {
@@ -564,26 +731,28 @@ const main = async () => {
 
     while (!ok) {
         ok = await setup();
-        try {
-            console.log(chalk.whiteBright.bold("Initializing Ethers"));
-            eth = await initEthers();
-            console.log(`${chalk.white.bold("✅ Ethers Ready!")}
+        if (ok) {
+            try {
+                console.log(chalk.whiteBright.bold("Initializing Ethers"));
+                eth = await initEthers();
+                console.log(`${chalk.white.bold("✅ Ethers Ready!")}
 - ${chalk.bold("provider:")} ${chalk.gray(CONSTANTS.PROVIDER_URL)}
 - ${chalk.bold("Wallet address:")} ${chalk.gray(eth.wallet.address)}
 - ${chalk.bold("SFA address:")} ${chalk.gray(await eth.contracts.tokenERC20.getAddress())}
 - ${chalk.bold("Market Contract address:")} ${chalk.gray(await eth.contracts.marketERC721.getAddress())}
-`);
+                `);
 
-            console.log(chalk.whiteBright.bold("Initializing Helia"));
-            ipfs = await initHelia();
-            const multiaddresses: string[] = ipfs.node?.libp2p.getMultiaddrs();
-            console.log(`${chalk.white.bold("✅ Helia Ready!")}
+                console.log(chalk.whiteBright.bold("Initializing Helia"));
+                ipfs = await initHelia();
+                const multiaddresses: Multiaddr[] = ipfs.node?.libp2p.getMultiaddrs();
+                console.log(`${chalk.white.bold("✅ Helia Ready!")}
 - ${chalk.bold("PeerId:")} ${chalk.gray(ipfs.node?.libp2p.peerId.toString())}
 - ${chalk.bold("MultiAddress of your local IPFS Node:")} \n${chalk.gray(multiaddresses.join("\n"))}
-`);
-        } catch (error) {
-            console.error("Error initializing modules:", error);
-            ok = false;
+                `);
+            } catch (error) {
+                console.error("Error initializing modules:", error);
+                ok = false;
+            }
         }
     }
     await menuOptions();

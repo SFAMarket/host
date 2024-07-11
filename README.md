@@ -14,19 +14,16 @@ pnpm start
 
 ## Automation
 
-you cna set your Host work automatically taking position everytime that a new SFA with preference condition are taken.
+you can setup auto Host! work automatically taking position everytime that a new SFA with preference condition are taken.
 
-see `preferences.json` file
+see `# Preferences` in `.env`file
 
-```json
-{
-  "automate": false,
-  "bytesPerVestingSeconds": {
-    "ETH": 3170000000,
-    "USDC": 0.0317
-  },
-  "maxCIDSize": 1000,
-  "maxDiskUse": 10e6,
-  "collateralRatioRange": [0, 1]
-}
+```bash
+# Preferences
+AUTO_HOST=false
+BYTES_PER_VESTING=3170000000
+MAX_CID_SIZE="500 MB"
+MAX_DISK_USE="10 GB"
+MIN_COLLATERAL_RATIO_BPS=0
+MAX_COLLATERAL_RAITO_BPS=10e3
 ```
