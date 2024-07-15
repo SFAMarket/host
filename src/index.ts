@@ -7,7 +7,7 @@ import {peerIdFromString} from "@libp2p/peer-id";
 import {PeerId} from "@libp2p/interface";
 import initEthers from "./modules/ethers.ts";
 import initHelia from "./modules/helia.ts";
-import {formatUnits, formatEther, parseUnits, ethers} from "ethers";
+import {ethers} from "ethers";
 import inquirer from "inquirer";
 import {DateTime} from "luxon";
 import * as utils from "./modules/utils.ts";
@@ -29,7 +29,7 @@ let SFAs: SFA[] = [];
 /**
  * IPFS actions
  */
-const printLocalPeerData = async () => {
+const getLocalNodeInfo = async () => {
     console.info("PeerId:", ipfs.node?.libp2p.peerId.toString());
     console.info("MultiAddress of this Node:");
     const addr = ipfs.node?.libp2p.getMultiaddrs();
@@ -133,6 +133,7 @@ const getCIDStats = async (cid: string) => {
 };
 
 const turnOffHelia = async () => {
+    console.clear();
     console.log("Closing helias");
     await ipfs.node?.stop();
     console.log("✅ Done");
@@ -249,14 +250,14 @@ const balanceERC20 = async (address?: string) => {
     const walletAddress = address || (await eth.wallet.getAddress());
     const decimals = await eth.contracts.tokenERC20.decimals();
     const sfaBalance = await eth.contracts.tokenERC20.balanceOf(walletAddress);
-    console.log("SFA Balance:", formatUnits(sfaBalance.toString(), decimals));
+    console.log("SFA Balance:", ethers.formatUnits(sfaBalance.toString(), decimals));
     const ethBalance = await eth.provider.getBalance(walletAddress);
-    console.log("ETH Balance:", formatEther(ethBalance));
+    console.log("ETH Balance:", ethers.formatEther(ethBalance));
 };
 
 const transferTokens = async (to: string, amount: string) => {
     const decimals = await eth.contracts.tokenERC20.decimals();
-    const tokenAmount = parseUnits(amount, decimals);
+    const tokenAmount = ethers.parseUnits(amount, decimals);
     try {
         const tx = await eth.contracts.tokenERC20.transfer(to, tokenAmount);
         const receipt = await tx.wait();
@@ -343,7 +344,7 @@ const menuOptions = async () => {
         },
         getLocalNodeInfo: async () => {
             try {
-                await printLocalPeerData();
+                await getLocalNodeInfo();
             } catch (error) {
                 console.log("catch error:", error);
             }
@@ -500,11 +501,8 @@ const menuOptions = async () => {
                         message: "Address allow to spend:",
                         default: `${martketAddress}`,
                         validate: (input: string) => {
-                            if (ethers.isHexString(input) && input.length === 42) {
-                                return true;
-                            } else {
-                                return "wrong private key format";
-                            }
+                            if (ethers.isHexString(input) && input.length === 42) return true;
+                            return "wrong private key format";
                         },
                     },
                     {type: "number", name: "amount", message: "Please input the Tokens amount to allow:"},
@@ -603,14 +601,8 @@ const setup = async () => {
             )}${chalk.dim(CONSTANTS.PRIVATE_KEY.slice(-6) + ")")}`,
             default: `${CONSTANTS.PRIVATE_KEY}`,
             validate: (input: string) => {
-                if (ethers.isHexString(input)) {
-                    return true;
-                } else {
-                    if (input.length === 64) {
-                        return ethers.isHexString(`0x${input}`);
-                    }
-                    return "wrong private key format";
-                }
+                if (ethers.isHexString(input) && input.length == 66) return true;
+                else return "wrong private key format";
             },
         },
         {
@@ -639,6 +631,7 @@ ${chalk.gray("follow questions to start hosting.")}
 
     // Inner loop for config auto host
     if (res.AUTO_HOST === true) {
+        console.clear();
         console.log(chalk.white.bold("Set Up Auto Host preferences:"));
         let ok: boolean = false;
         const questions = [
@@ -733,11 +726,14 @@ const main = async () => {
         ok = await setup();
         if (ok) {
             try {
+                console.clear();
                 console.log(chalk.whiteBright.bold("Initializing Ethers"));
                 eth = await initEthers();
+                const balance = await eth.provider.getBalance(eth.wallet.address);
+                const balanceWithDecimals = ethers.parseEther(balance.toString()).toString();
                 console.log(`${chalk.white.bold("✅ Ethers Ready!")}
-- ${chalk.bold("provider:")} ${chalk.gray(CONSTANTS.PROVIDER_URL)}
-- ${chalk.bold("Wallet address:")} ${chalk.gray(eth.wallet.address)}
+- ${chalk.bold("Provider:")} ${chalk.gray(CONSTANTS.PROVIDER_URL)}
+- ${chalk.bold("Wallet address:")} ${chalk.gray(eth.wallet.address)} - Balance: ${chalk.gray(balanceWithDecimals)}
 - ${chalk.bold("SFA address:")} ${chalk.gray(await eth.contracts.tokenERC20.getAddress())}
 - ${chalk.bold("Market Contract address:")} ${chalk.gray(await eth.contracts.marketERC721.getAddress())}
                 `);
